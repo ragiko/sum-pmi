@@ -1,81 +1,75 @@
 #!/usr/bin/ruby
 # -*- coding: utf-8 -*-
 
-require "./rubyLib/scraiping"
-require "./extractcontent/lib/extractcontent"
-require "./rubyLib/mecab_tfidf.rb"
+require "./rubyLib/file_util.rb"
+require "./rubyLib/mecab_lib.rb"
 require "json"
-require "nkf"
 require "pp"
 
-queries = File.open("./data/query.txt").read()
-              .delete(" ")
-              .split("\n")
+# csjのpmiを取得
+json = File.open("./data/pmi.json").read()
+csj_pmi = JSON.parse(json)
 
-# 文書ごとのTFIDF
-tfidf_vectors = MeCabTFIDF::mecab_tfidf(queries).tf_idf
-## 1番目の文書について
-tfidf_vector = tfidf_vectors[0]
+# スライドの文書群を取得
+query_path = "./data/query.txt"
+queries = File.open(query_path).read()
+                .delete(" ")
+                .split("\n")
 
-# sort to value
-tfidf_vector_sort = tfidf_vector.sort {|(k1, v1), (k2, v2)| v2 <=> v1 }
-
-# TFIDF TOP 8 WORDS
-tfidf_top_words = tfidf_vector_sort[0..7].map{ |a, b| a }
-
-# TFIDFの単語3の組み合わせ
-combination_words = tfidf_top_words.combination(3).to_a
+##
+# queryの情報
+#
+# == FORMAT ==
+#[{:body => "わがはいは猫である", 
+# :sum_pmi_vector => {"モデル"=>1.3, "うち"=>"データ"}}]
+## 
+query_sum_pmi = []
 
 ## 
-# WEBから情報を取得
+# SUM PMI を計算 
 ##
-# 検索エンジンインスタンス初期化 
-web_client = Scraiping::WebClient.new       # Webアクセスを担当するインスタンスを生成
-yahoo_search = Scraiping::YahooSearch.new   # Yahoo検索エンジンのインスタンスを生成
-yahoo_search.web_client = web_client        # 検索結果ページへのアクセスにweb_clientインスタンスを使用
-# WEBから取得した情報を格納
-# == FORMAT ==
-# [{:query => ['面', '点'],
-#   :url => "http://google.com",
-#   :doc => ['私は...', '点と面を結んで...']},
-# ...]
-result_web_contents = []
+queries.each do |query|
 
-# クエリ単語
-combination_words.each do |query|
+  # 検索対象文書の単語を取得
+  query_words = MeCabLib.new.analyze_sentence(query)
 
-  p query
+  # 単語の組み合わせ
+  # [["位置", "手法"], ["位置", 問題], ..]
+  combination_words = query_words.combination(2).to_a
   
-  # 検索エンジンを使用して検索
-  # 1引数目 => ページの番号
-  urlList = yahoo_search.retrieve(1, query)   # 検索クエリで，1~10番目の検索結果のURLを取得
+  # 2重ハッシュ化
+  # {"行程"=>{"テスト"=>0, "面"=>0}, ...}
+  h = Hash.new { |h, k| h[k] = Hash.new(0) }
+  combination_word_hash = h
 
-  # 検索結果ページへのアクセス 
-  bodies = []
+  combination_words.map { |word1, word2|
+    combination_word_hash[word1][word2] = 1
+  }
+  
+  # sum pmi ベクトル
+  # {"定式"=>3.37, "化"=>0.48, ...}
+  sum_pmi_vector = {}
 
-  urlList.each do |url| 
-    begin
-      http = web_client.open(url)                         # 実際にページにアクセス
+  query_words.each do |word1| 
+    sum_pmi = 0.0
+    combination_word_hash[word1].keys.each do |word2| 
 
-      # 検索結果ページが有効でない場合，そのURLへのアクセスをスキップ
-      if http == nil
-        next
+      # a[w1]とa[w1][w2]の順でnilチェッしないとダメ
+      if csj_pmi[word1].nil? == false and 
+            csj_pmi[word1][word2].nil? == false
+
+        sum_pmi += csj_pmi[word1][word2]     
       end
-
-      # 検索結果から本文らしい部分を抽出して表示
-      encoded_contents = NKF.nkf("-w", http.read)         # 文字コード変換
-      body =  ExtractContent::analyse(encoded_contents)    # 本文らしい部分を尤度計算して，抽出
-      result_web_contents << { query: query, url: url, doc: body}
-      
-    rescue => e
-      p e
-      next
     end
+
+    sum_pmi_vector[word1] = sum_pmi
   end
+
+  query_sum_pmi << { body: query  ,sum_pmi_vector: sum_pmi_vector }
 end
 
-File.open("./data/web_retrival_result.json", "w") do |f|
-  f.write(result_web_contents.to_json)
+File.open("./result/sum_pmi_for_query.json", "w") do |f|
+  f.write(query_sum_pmi.to_json)
 end
 
-pp result_web_contents.size
+

@@ -778,6 +778,10 @@ def calcCosineScale(vector1, vector2)
 
     word_list = (vector1.keys & vector2.keys)
     word_list.each {|word|
+        pp vector1
+        pp vector2
+        pp vector1[word] 
+        pp vector2[word]
         inner_product += vector1[word] * vector2[word]
     }
 
