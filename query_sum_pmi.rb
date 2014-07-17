@@ -33,19 +33,19 @@ queries.each do |query|
   # 検索対象文書の単語を取得
   query_words = MeCabLib.new.analyze_sentence(query)
 
-  # 単語の組み合わせ
+  # 単語の順列
   # [["位置", "手法"], ["位置", 問題], ..]
-  combination_words = query_words.combination(2).to_a
-  
+  combination_words = query_words.permutation(2).to_a
+
   # 2重ハッシュ化
   # {"行程"=>{"テスト"=>0, "面"=>0}, ...}
   h = Hash.new { |h, k| h[k] = Hash.new(0) }
   combination_word_hash = h
 
   combination_words.map { |word1, word2|
-    combination_word_hash[word1][word2] = 1
+    combination_word_hash[word1][word2] = 0
   }
-  
+
   # sum pmi ベクトル
   # {"定式"=>3.37, "化"=>0.48, ...}
   sum_pmi_vector = {}
