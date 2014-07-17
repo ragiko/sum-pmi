@@ -1,133 +1,94 @@
-#!/usr/bin/ruby
-# -*- coding: utf-8 -*-
+#! /usr/bin/ruby
+#coding: utf-8
 
-# require "vital"
-#====================================================================================================
-#    【概要】
-#    文書中の単語の正規化TFを，単語をキーとしたハッシュで返す
-#    【引数】
-#    args        :it is passed to function "getWordList"
-#    kind        :it determines args's kind (example "file", "asrlog", "sentence" and so on.)
-#    【戻り値】
-#    tf            :単語をキーとし，正規化TF値を保存したハッシュ．
-#====================================================================================================
-def getTF(args, kind)
-    tf = Hash.new
-    tf.default = 0
-    n_noun = 0     #名詞出現回数.TFの正規化に使用．
 
-    getWordList(args, kind).each{|word|
-        if word[1] == "名詞"
-            tf[word[0]] += 1 
-            n_noun += 1
-        end
-    }
+class TFIDF
 
-    #正規化TF計算
-    tf.each{|word,value|
-        tf[word] = value.to_f / n_noun.to_f
-    }
+	# data - 		文章の単語群
+	def initialize(data)
+		@data = data
+	end
 
-    return tf
-end
+	def tf 
+		# @tf = calc_tf if @tf.nil?　と一緒
+		@tf ||= calc_tf
+	end
 
-#====================================================================================================
-#   legacy function
-#    【概要】
-#    単語のIDF値を，単語をキーとしたハッシュで返す．
-#    【引数】
-#    directory_path    :IDFを計算するファイル群が存在するディレクトリへのパス．絶対パス，相対パスは問わない
-#    【戻り値】
-#    idf                :単語をキーとし，IDF値を保存したハッシュ
-#====================================================================================================
+	def idf 
+		@idf ||= calc_idf 
+	end
 
-#def getIDF(directory_path, noun_hash="")
-#    df  = Hash.new
-#    df.default = 0
-#    idf = Hash.new
-#    idf.default = 0
-#    n_file = 0        #ドキュメント数．IDFの計算に使用．
-#
-#    #DF計算
-#    getFileList(File::expand_path(directory_path) + "/").each{|file_path|
-#        n_file += 1                                            #ドキュメント数カウント
-#        
-#        if noun_hash == ""
-#            getWordList(file_path, "file", "uniq").each{|word|
-#                if word[1] == "名詞" then df[word[0]] += 1 end
-#            }
-#        else
-#            getWordList([ file_path, noun_hash ], "asrlog-file", "uniq").each{|word|            
-#                if word[1] == "名詞" then df[word[0]] += 1 end
-#            }
-#        end
-#    }
-#    
-#    #IDF計算
-#    df.each{|word, df|
-#        idf[word] = Math::log10(1.0 + (n_file / df.to_f))
-#    }
-#    
-#    return idf
-#end
+	# This is basically calculated by multiplying tf by idf
+  def tf_idf(set_idf=nil)
+    tf_idf = tf.map(&:clone)
+    # idfを設定
+    use_idf = set_idf.nil? ? idf : set_idf
 
-#====================================================================================================
-#    【概要】
-#    単語のIDF値を，単語をキーとしたハッシュで返す．
-#    【引数】
-#    file_path_list     :ファイルのへの絶対パスを要素としたArray
-#    noun_hash          :名詞リスト(optional) これを指定する場合，形態素解析による品詞情報は使われない
-#    【戻り値】
-#    idf                :単語をキーとし，IDF値を保存したハッシュ
-#====================================================================================================
-def getIDF(file_path_list, noun_hash="")
-    df  = Hash.new
-    df.default = 0
-    idf = Hash.new
-    idf.default = 0
-    n_file = 0        #ドキュメント数．IDFの計算に使用．
-
-    #DF計算
-    file_path_list.each{|file_path|
-        n_file += 1                                            #ドキュメント数カウント
-        
-        if noun_hash == ""
-            getWordList(file_path, "file", "uniq").each{|word|
-                if word[1] == "名詞" then df[word[0]] += 1 end
-            }
-        else
-            getWordList([ file_path, noun_hash ], "asrlog-file", "uniq").each{|word|            
-                if word[1] == "名詞" then df[word[0]] += 1 end
-            }
-        end
-    }
+    tf.each_with_index do |document, index|
+      document.each_pair do |term, tf_score|
+      	# 構造がハッシュの配列であるため
+        tf_idf[index][term] = tf_score * use_idf[term] unless use_idf[term].nil?
+      end
+    end
     
-    #IDF計算
-    df.each{|word, df|
-        idf[word] = Math::log10(1.0 + (n_file / df.to_f))
-    }
-    
-    return idf
-end
-#====================================================================================================
-#    【概要】
-#    文書中の単語のTF-iDF値を，単語をキーとしたハッシュで返す．
-#    【引数】
-#    sentence        :TF-iDFを計算する文章．
-#    directory_path    :ドキュメント郡が存在するディレクトリのパス．絶対パス，相対パスは問わない
-#    【戻り値】
-#    tf-idf            :単語をキーとし，TF-iDFの値を要素とするハッシュ
-#====================================================================================================
+    tf_idf
+  end
 
-def getTFIDF(tf, idf)
-    tfidf = Hash.new
-    tfidf.default = 0
+  private 
 
+	# Returns all terms, once
+  def terms
+    @data.map(&:uniq).flatten
+  end
 
-    #TF-iDFの計算
-    tf.each_key{|word|
-        tfidf[word] = tf[word] * idf[word]
-    }
+  def total_documents
+    @data.size.to_f
+  end
 
-    return tfidf
+	# sentenceは文章内容
+  def calc_tf
+    results = []
+
+    @data.each do |document|
+    	document_result = Hash.new {|h, k| h[k] = 0 }
+    	document_size = document.size.to_f
+
+    	# 頻度カウント
+    	document.each do |term|
+        document_result[term] += 1
+      end
+
+       # 正規化
+      document_result.each_key do |term|
+        document_result[term] /= document_size
+      end
+
+      results << document_result
+    end
+
+    results
+  end
+
+  def calc_idf
+  	results = Hash.new {|h, k| h[k] = 0 }
+
+    # 文書数が位置の場合 idfの値は全て1
+    if total_documents == 1
+      terms.each do |term|
+        results[term] = 1
+      end
+    else 
+      terms.each do |term|
+        results[term] += 1
+      end
+
+      log_total_count = Math.log10(total_documents)
+      results.each_pair do |term, count|
+        results[term] = log_total_count - Math.log10(count)
+      end
+    end
+
+    results.default = nil
+    results
+  end
 end

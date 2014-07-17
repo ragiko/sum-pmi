@@ -14,6 +14,8 @@ csj_pmi = JSON.parse(json)
 slide_path = "./data/slide_recognition_txt"
 slide_contents = FileUtil::get_file_contents(slide_path)
 
+# corpus = csj
+# slide
 slide_contents.each do |slide_content|
 
   body = slide_content[:body].delete("\n ")
