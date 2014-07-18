@@ -13,6 +13,9 @@ queries = JSON.parse(json)
 json = File.open("./result/sum_pmi_for_search_document.json").read()
 search_docs = JSON.parse(json)
 
+# CSJのIDFを読み込み
+json = File.open("./data/idf.txt").read()
+csj_idf = JSON.parse(json)
 
 ## 
 # SUM PMIの負の値を除く 
@@ -45,29 +48,42 @@ queries.each do |query|
 
   query_doc_cos_similarity = []
 
+  ##
+  # pmi * IDF
+  ##
+  query_sum_pmi_idf = Hash.new(0)
+
+  query["sum_pmi_vector"].each_pair do |k, v|
+    query_sum_pmi_idf[k] = v * csj_idf[k]**3 if csj_idf[k].nil? == false
+  end
+
+  ## 変更します！！！！！！！！！
+  query["sum_pmi_vector"] = query_sum_pmi_idf
+
   search_docs.each do |search_doc|
-    # pp "#{query['body']} #{query['sum_pmi_vector']}"
-    # pp "#{search_doc['body']} #{search_doc['sum_pmi_vector']}"
-    
-    #query["sum_pmi_vector"].each_pair do |k, v|
-    #  query["sum_pmi_vector"][k] = v * idf[k]
-    #end
 
-    #search_doc["sum_pmi_vector"].each_pair do |k, v|
-    #  search_doc["sum_pmi_vector"][k] = v * idf[k]
-    #end
+    ##
+    # pmi * IDF
+    ##
+    search_doc_sum_pmi_idf = Hash.new(0) 
 
-    #abort "############################################################"
+    search_doc["sum_pmi_vector"].each_pair do |k, v|
+      search_doc_sum_pmi_idf[k] = v * csj_idf[k]**3 if csj_idf[k].nil? == false
+    end
 
-    cos_similarity = calcCosineScale(query["sum_pmi_vector"], search_doc["sum_pmi_vector"])
+    ## 変更します！！！！！！！！！
+    search_doc["sum_pmi_vector"] = search_doc_sum_pmi_idf
+
+    # cos類似度
+    cos_similarity = calcCosineScale(search_doc["sum_pmi_vector"], query["sum_pmi_vector"])
 
     query_doc_cos_similarity << {
       query: query["body"],
       search_doc_name: search_doc["filename"],
-      search_doc_contents: search_doc["body"],
-      cos_similarity: cos_similarity,
-      query_sum_pmi: query["sum_pmi_vector"],
-      search_doc_sum_pmi: search_doc["sum_pmi_vector"]
+      search_doc_contents: search_doc["body"].delete("\n "),
+      cos_similarity: cos_similarity
+      #query_sum_pmi: query["sum_pmi_vector"],
+      #search_doc_sum_pmi: search_doc["sum_pmi_vector"]
     }
   end
 
@@ -75,15 +91,20 @@ queries.each do |query|
 
 end
 
-# queries.each_with_index do |query, i|
-#   puts "########################################################"
-#   puts "# QUERY #{i+1}"
-#   puts "########################################################"
-#   pp query["body"]
-#   pp query["sum_pmi_vector"].sort{ |a, b| b[1] <=> a[1]  }
-#   puts ""
-#   puts ""
-# end
+##
+# クエリの値を出力
+##
+queries.each_with_index do |query, i|
+  puts "########################################################"
+  puts "# QUERY #{i+1}"
+  puts "########################################################"
+  pp query["body"]
+  pp query["sum_pmi_vector"].sort{ |a, b| b[1] <=> a[1]  }
+  puts ""
+  puts ""
+end
+
+abort
 
 MAX_SORT_DOCS = 5
 
@@ -95,10 +116,6 @@ pp sort[0..MAX_SORT_DOCS]
 puts ""
 puts ""
 
-abort
-
-
-
 
 puts "########################################################"
 puts "# QUERY 2"
@@ -107,6 +124,7 @@ sort =  query_doc_cos_similarities[1].sort!{ |a, b| b[:cos_similarity] <=> a[:co
 pp sort[0..MAX_SORT_DOCS]
 puts ""
 puts ""
+
 
 puts "########################################################"
 puts "# QUERY 3"
