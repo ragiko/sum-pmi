@@ -7,7 +7,7 @@ require "json"
 require "pp"
 
 # csjのpmiを取得
-json = File.open("./data/pmi.json").read()
+json = File.open("./data/pmi_normalized.json").read()
 csj_pmi = JSON.parse(json)
 
 # スライドの文書群を取得
